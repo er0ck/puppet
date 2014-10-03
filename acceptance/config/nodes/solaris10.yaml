@@ -2,10 +2,9 @@ HOSTS:
   master:
     roles:
       - master
-      - agent
-    platform: solaris-10-x86_64
+    platform: centos-6-x86_64
     hypervisor: vcloud
-    template: Delivery/Quality Assurance/Templates/vCloud/solaris-10-x86_64
+    template: Delivery/Quality Assurance/Templates/vCloud/centos-5-x86_64
   agent:
     roles:
       - agent
