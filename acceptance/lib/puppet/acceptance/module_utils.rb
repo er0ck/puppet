@@ -1,7 +1,6 @@
 module Puppet
   module Acceptance
     module ModuleUtils
-
       # Return an array of module paths for a given host.
       #
       # Example return value:
@@ -180,10 +179,11 @@ module Puppet
         modulepath = moduledir.is_a?(Array) ? moduledir : [moduledir]
         moduledir= nil
 
-        modulepath.each do |i|
+        modulepath.each do |path|
+          full_path = File.join(path.strip, module_name)
           # module directory should exist
-          if on(host, %Q{[ -d "#{i}/#{module_name}" ]}, :acceptable_exit_codes => (0..255)).exit_code == 0
-            moduledir = i
+          if on(host, %Q{[ -d "#{full_path}" ]}, :acceptable_exit_codes => (0..255)).exit_code == 0
+            moduledir = path.strip
           end
         end
         fail_test('module directory not found') unless moduledir
@@ -229,42 +229,51 @@ module Puppet
         end
       end
 
-      # Create a simple directory environment and puppet.conf at :tmpdir.
+      # Create a simple legacy and directory environment at :path_to_environments.
       #
       # @note Also registers a teardown block to remove generated files.
       #
-      # @param tmpdir [String] directory to contain all the
+      # @param path_to_environments [String] directory to contain all the
       #   generated environment files
       # @return [String] path to the new puppet configuration file defining the
       #   environments
-      def generate_base_directory_environments(tmpdir)
-        puppet_conf = "#{tmpdir}/puppet2.conf"
-        dir_envs = "#{tmpdir}/environments"
+      def generate_base_legacy_and_directory_environments(path_to_environments)
+        puppet_conf = "#{path_to_environments}/puppet2.conf"
+        legacy_env = "#{path_to_environments}/legacyenv"
+        dir_envs = "#{path_to_environments}/environments"
 
-        step 'Configure a the direnv directory environment'
+        step "ensure we don't have left over bad state from another, possibly failed run"
+        on master, "rm -rf #{legacy_env} #{dir_envs} #{puppet_conf}"
+
+        # and register to clean up afterwords
+        teardown do
+          on master, "rm -rf #{legacy_env} #{dir_envs} #{puppet_conf}"
+        end
+
+        step 'Configure a non-default legacy and directory environment'
         apply_manifest_on master, %Q{
-          File {
-            ensure => directory,
-            owner => #{master.puppet['user']},
-            group => #{master.puppet['group']},
-            mode => "0750",
-          }
           file {
             [
+              '#{legacy_env}',
+              '#{legacy_env}/modules',
               '#{dir_envs}',
               '#{dir_envs}/direnv',
             ]:
+              ensure => directory,
           }
-
           file {
             '#{puppet_conf}':
-              ensure => file,
-              content => "
-                [main]
-                environmentpath=#{dir_envs}
-              "
+              source => $settings::config,
           }
         }
+
+        # remove environmentpath entry from config
+        on master, "sed '/environmentpath/d' #{puppet_conf} > #{path_to_environments}/tmp && mv #{path_to_environments}/tmp #{puppet_conf}"
+
+        on master, puppet("config", "set",
+                          "modulepath", "#{legacy_env}/modules",
+                          "--section", "legacyenv",
+                          "--config", puppet_conf)
 
         return puppet_conf
       end

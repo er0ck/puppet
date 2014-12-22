@@ -3,7 +3,7 @@ require 'puppet/acceptance/module_utils'
 extend Puppet::Acceptance::ModuleUtils
 
 hosts.each do |host|
-  skip_test "skip tests requiring forge certs on solaris and aix" if host['platform'] =~ /solaris/
+  skip_test "skip tests requiring forge certs on solaris" if host['platform'] =~ /solaris/
 end
 
 module_author = "pmtacceptance"
