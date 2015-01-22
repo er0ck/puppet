@@ -3,16 +3,15 @@ HOSTS:
     roles:
       - master
       - agent
-      - database
     platform: ubuntu-trusty-x86_64
     hypervisor: vcloud
     template: ubuntu-1404-x86_64
   agent:
     roles:
       - agent
-    platform: ubuntu-trusty-i386
+    platform: osx-109-x86_64
     hypervisor: vcloud
-    template: ubuntu-1404-i386
+    template: osx-109-x86_64
 CONFIG:
   datastore: instance0
   resourcepool: delivery/Quality Assurance/FOSS/Dynamic

@@ -1,9 +1,14 @@
 {
+  :type => 'git',
+  :forge_host => 'forge-aio01-petest.puppetlabs.com',
   :install => [
     'facter#stable',
     'hiera#stable',
     'puppet',
   ],
+  :add_el_extras => true,
+  :load_path => './lib/',
+  :log_level => 'verbose',
   :pre_suite => [
     'setup/git/pre-suite/000_EnvSetup.rb',
     'setup/common/pre-suite/001_PkgBuildSetup.rb',

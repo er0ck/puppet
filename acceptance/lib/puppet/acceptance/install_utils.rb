@@ -11,6 +11,7 @@ module Puppet
         :debian_ruby18 => /debian|ubuntu-lucid|ubuntu-precise/,
         :solaris_10    => /solaris-10/,
         :solaris_11    => /solaris-11/,
+        :sles          => /sles/,
         :windows       => /windows/,
       }.freeze
 

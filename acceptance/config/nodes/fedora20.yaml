@@ -3,6 +3,7 @@ HOSTS:
     roles:
       - master
       - agent
+      - database
     platform: fedora-20-x86_64
     hypervisor: vcloud
     template: fedora-20-x86_64
