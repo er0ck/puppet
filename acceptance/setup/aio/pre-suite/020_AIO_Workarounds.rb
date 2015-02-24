@@ -3,11 +3,12 @@ on master, "mkdir -p #{master['distmoduledir']}"
 on master, "mkdir -p #{master['sitemoduledir']}"
 
 step "(PUP-4004) Set permissions on puppetserver directories that currently live in the agent cache dir"
+vardir = master.puppet('master')['vardir']
 %w[reports server_data yaml bucket].each do |dir|
-  on master, "install --directory /opt/puppetlabs/puppet/cache/#{dir}"
+  on master, "install --directory #{vardir}/#{dir}"
 end
-on master, "chown -R puppet:puppet /opt/puppetlabs/puppet/cache"
-on master, "chmod -R 750 /opt/puppetlabs/puppet/cache"
+on master, "chown -R puppet:puppet #{vardir}"
+on master, "chmod -R 750 #{vardir}"
 
 # The AIO puppet-agent package does not create the puppet user or group, but
 # puppet-server does. However, some puppet acceptance tests assume the user
@@ -34,10 +35,13 @@ end
 # of the default master-var-dir in puppetserver, and the user
 # based codedir.
 step "(SERVER-347) Set required codedir setting on puppetserver"
-on master, puppet("config set codedir /etc/puppetlabs/code --section master")
+on master, puppet("config set codedir #{master.puppet('master')['codedir']} --section master")
 
+# master.defaults has this but it's beaker's hard-coded default
+# configprint from the master doesn't have puppet server's confdir
+#   so we have to use the options hash here
 step "(SERVER-370) overwrite ruby-load-path"
-create_remote_file(master, '/etc/puppetserver/conf.d/os-settings.conf', <<-EOF)
+create_remote_file(master, "#{options[:puppetserver_confdir]}/os-settings.conf", <<-EOF)
 os-settings: {
     ruby-load-path: [/opt/puppetlabs/puppet/lib/ruby/vendor_ruby]
 }
