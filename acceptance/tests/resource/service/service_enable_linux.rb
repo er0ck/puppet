@@ -13,9 +13,6 @@ package_name = {'el'     => 'httpd',
                 'ubuntu' => 'apache2',
 }
 
-start_runlevels     = ["2", "3", "4", "5"]
-kill_runlevels      = ["0", "1", "6"]
-
 agents.each do |agent|
   platform = agent.platform.variant
   majrelease = on(agent, facter('operatingsystemmajrelease')).stdout.chomp.to_i
@@ -27,7 +24,8 @@ agents.each do |agent|
   init_script_systemd = "/usr/lib/systemd/system/#{package_name[platform]}.service"
   symlink_systemd     = "/etc/systemd/system/multi-user.target.wants/#{package_name[platform]}.service"
 
-  init_script         = "/etc/init.d/#{package_name[platform]}"
+  start_runlevels     = ["2", "3", "4", "5"]
+  kill_runlevels      = ["0", "1", "6"]
   if platform == 'debian' && majrelease == 6
     start_symlink     = "S20apache2"
     kill_symlink      = "K01apache2"
@@ -37,6 +35,16 @@ agents.each do |agent|
   elsif platform == 'debian' && majrelease == 8
     start_symlink     = "S02apache2"
     kill_symlink      = "K01apache2"
+  elsif platform == 'sles'   && majrelease == 10
+    start_symlink     = "S13apache2"
+    kill_symlink      = "K09apache2"
+    start_runlevels   = ["3", "5"]
+    kill_runlevels    = ["3", "5"]
+  elsif platform == 'sles'   && majrelease == 11
+    start_symlink     = "S11apache2"
+    kill_symlink      = "K01apache2"
+    start_runlevels   = ["3", "5"]
+    kill_runlevels    = ["3", "5"]
   else
     start_symlink     = "S85httpd"
     kill_symlink      = "K15httpd"
@@ -75,34 +83,44 @@ agents.each do |agent|
 
   step "installing httpd/apache"
   apply_manifest_on(agent, manifest_install_httpd, :catch_failures => true)
-  # chkconfig --del will remove all rc.d symlinks for this service
-  on agent, "chkconfig --del httpd", :accept_all_exit_codes => true
 
   step "ensure enabling service creates the start & kill symlinks"
-  is_sysV = ((platform == 'centos' || platform == 'el') && majrelease < 7) || platform == 'debian'
+  is_sysV = ((platform == 'centos' || platform == 'el') && majrelease < 7) ||
+              platform == 'debian' ||
+             (platform == 'sles'                        && majrelease < 12)
+  apply_manifest_on(agent, manifest_httpd_disabled, :catch_failures => true)
   apply_manifest_on(agent, manifest_httpd_enabled, :catch_failures => true) do
     if is_sysV
       # debian platforms using sysV put rc runlevels directly in /etc/
       on agent, "ln -s /etc/ /etc/rc.d", :accept_all_exit_codes => true
+      rc_symlinks = on(agent, "find /etc/ -name *#{package_name[platform]}", :accept_all_exit_codes => true).stdout
       start_runlevels.each do |runlevel|
-        on agent, "test -L /etc/rc.d/rc#{runlevel}.d/#{start_symlink} && test -f #{init_script}"
+        assert_match("#{runlevel}.d/#{start_symlink}", rc_symlinks, "did not find #{start_symlink} in runlevel #{runlevel}")
+        assert_match(/\/etc(\/rc\.d)?\/init\.d\/#{package_name[platform]}/, rc_symlinks, "did not find #{package_name[platform]} init script")
       end
       kill_runlevels.each do |runlevel|
-        on agent, "test -L /etc/rc.d/rc#{runlevel}.d/#{kill_symlink} && test -f #{init_script}"
+        assert_match("#{runlevel}.d/#{kill_symlink}", rc_symlinks, "did not find #{kill_symlink} in runlevel #{runlevel}")
       end
     else
-      on agent, "test -L #{symlink_systemd} && test -f #{init_script_systemd}"
+      rc_symlinks = on(agent, "ls #{symlink_systemd} #{init_script_systemd}", :accept_all_exit_codes => true).stdout
+      assert_match("#{symlink_systemd}",     rc_symlinks, "did not find #{symlink_systemd}")
+      assert_match("#{init_script_systemd}", rc_symlinks, "did not find #{init_script_systemd}")
     end
   end
 
   step "ensure disabling service removes start symlinks"
   apply_manifest_on(agent, manifest_httpd_disabled, :catch_failures => true) do
     if is_sysV
-      (start_runlevels + kill_runlevels).each do |runlevel|
-        on agent, "test -L /etc/rc.d/rc#{runlevel}.d/#{kill_symlink} && test -f #{init_script}"
+      rc_symlinks = on(agent, "find /etc/ -name *#{package_name[platform]}", :accept_all_exit_codes => true).stdout
+      # sles removes rc.d symlinks
+      if platform != 'sles'
+        (start_runlevels + kill_runlevels).each do |runlevel|
+          assert_match("#{runlevel}.d/#{kill_symlink}", rc_symlinks, "did not find #{kill_symlink} in runlevel #{runlevel}")
+        end
       end
     else
-      on agent, "test ! -e #{symlink_systemd}"
+      rc_symlinks = on(agent, "ls #{symlink_systemd}", :accept_all_exit_codes => true).stdout
+      refute_match("#{symlink_systemd}",     rc_symlinks, "should not have found #{symlink_systemd}")
     end
   end
 end
