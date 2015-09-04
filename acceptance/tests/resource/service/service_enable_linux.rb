@@ -1,9 +1,9 @@
 test_name 'SysV and Systemd Service Provider Validation'
 
-confine :except, :platform => 'windows'
-confine :except, :platform => /osx/  # covered by launchd_provider.rb
-confine :except, :platform => 'solaris'
-confine :except, :platform => /ubuntu-[a-u]/ # upstart covered by ticket_14297_handle_upstart.rb
+
+confine :to, :platform => /el|centos|fedora|debian|sles|ubuntu-[v-z]/
+# osx covered by launchd_provider.rb
+# ubuntu-[a-u] upstart covered by ticket_14297_handle_upstart.rb
 
 package_name = {'el'     => 'httpd',
                 'centos' => 'httpd',
@@ -72,7 +72,12 @@ agents.each do |agent|
   }
 
   teardown do
-    apply_manifest_on(agent, manifest_uninstall_httpd)
+    if platform == 'sles'
+      on agent, 'rpm -e apache2 apache2-worker',  :accept_all_exit_codes => true
+      on agent, 'rpm -e apache2 apache2-prefork', :accept_all_exit_codes => true
+    else
+      apply_manifest_on(agent, manifest_uninstall_httpd)
+    end
   end
 
   if platform == 'fedora' && majrelease > 21
